@@ -358,33 +358,61 @@ def tweet_current_song():
 def main():
     print("Starting Spotify to Twitter bot...")
     last_tweeted_song = None
+    rate_limit_wait = 0  # Track rate limit cooldown
     
     while True:
         try:
+            if rate_limit_wait > 0:
+                print(f"\nRate limit cooldown: waiting {rate_limit_wait} seconds...")
+                time.sleep(rate_limit_wait)
+                rate_limit_wait = 0
+            
             print("\nChecking current playback...")
             current_track = sp.current_playback()
             
             if current_track is not None:
                 current_song_id = current_track['item']['id']
-                print(f"Found track with ID: {current_song_id}")
+                progress_ms = current_track['progress_ms']
+                duration_ms = current_track['item']['duration_ms']
+                remaining_ms = duration_ms - progress_ms
                 
+                # Add 2 seconds buffer to ensure song has fully changed
+                wait_time = (remaining_ms / 1000) + 2
+                
+                print(f"Found track with ID: {current_song_id}")
+                print(f"Song progress: {format_duration(progress_ms)} / {format_duration(duration_ms)}")
+                
+                # Only tweet if the song has changed
                 if current_song_id != last_tweeted_song:
                     print("New song detected, tweeting...")
-                    tweet_current_song()
-                    last_tweeted_song = current_song_id
+                    try:
+                        tweet_current_song()
+                        last_tweeted_song = current_song_id
+                        print(f"Waiting {int(wait_time)} seconds for song to finish...")
+                        time.sleep(wait_time)
+                    except tweepy.errors.TooManyRequests as e:
+                        print("Hit Twitter rate limit. Adding cooldown period...")
+                        rate_limit_wait = 900  # 15 minutes cooldown
+                        continue
+                    except Exception as e:
+                        print(f"Error tweeting: {str(e)}")
+                        # If there's an error, wait 60 seconds before retry
+                        time.sleep(60)
                 else:
-                    print("Same song still playing, waiting...")
+                    print("Same song still playing...")
+                    print(f"Waiting {int(wait_time)} seconds for song to finish...")
+                    time.sleep(wait_time)
             else:
                 print("No track currently playing")
-            
-            print("Waiting 30 seconds before next check...")
-            time.sleep(30)
+                # If no track is playing, check every minute
+                time.sleep(60)
             
         except Exception as e:
             print(f"Error in main loop: {str(e)}")
             print("Full traceback:")
             traceback.print_exc()
-            time.sleep(30)
+            # If there's an error, wait 60 seconds before retry
+            time.sleep(60)
 
 if __name__ == "__main__":
     main() 
