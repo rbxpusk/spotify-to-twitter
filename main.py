@@ -81,21 +81,18 @@ class RateLimitHandler:
     def can_tweet(self):
         now = datetime.now()
         
-        # Clean up old timestamps
         while self.hourly_tweets and (now - self.hourly_tweets[0]) > timedelta(hours=1):
             self.hourly_tweets.popleft()
         while self.daily_tweets and (now - self.daily_tweets[0]) > timedelta(days=1):
             self.daily_tweets.popleft()
         
-        # Check if we're within limits
         if len(self.hourly_tweets) >= self.max_tweets_per_hour:
             return False, "Hourly tweet limit reached"
         if len(self.daily_tweets) >= self.max_tweets_per_day:
             return False, "Daily tweet limit reached"
         
-        # If we had a recent error, implement exponential backoff
         if self.last_error_time:
-            wait_time = min(15 * (2 ** self.consecutive_errors), 900)  # Max 15 minutes
+            wait_time = min(15 * (2 ** self.consecutive_errors), 900)
             if now - self.last_error_time < timedelta(seconds=wait_time):
                 return False, f"Cooling down after error ({wait_time}s)"
         
@@ -114,7 +111,6 @@ class RateLimitHandler:
         self.last_error_time = datetime.now()
         self.consecutive_errors += 1
 
-# Create global rate limit handler
 rate_limiter = RateLimitHandler()
 
 def format_duration(ms):
@@ -221,16 +217,13 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
         main_color = dominant_colors[0]
         accent_color = dominant_colors[1] if len(dominant_colors) > 1 else main_color
         
-        # Create base image
         image = Image.new('RGBA', (CANVAS_WIDTH, CANVAS_HEIGHT))
         
-        # Create gradient background
         gradient = create_gradient_background((CANVAS_WIDTH, CANVAS_HEIGHT), 
                                            [main_color, accent_color, 
                                             tuple(int(c * 0.6) for c in main_color)])
         image.paste(gradient)
         
-        # Add decorative patterns
         pattern_overlay = Image.new('RGBA', (CANVAS_WIDTH, CANVAS_HEIGHT), (0, 0, 0, 0))
         pattern_draw = ImageDraw.Draw(pattern_overlay)
         
@@ -260,15 +253,12 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
             artist_font = ImageFont.load_default()
             details_font = ImageFont.load_default()
         
-        # Convert to RGBA for drawing
         image = image.convert('RGBA')
         draw = ImageDraw.Draw(image)
         
-        # Album art placement
         album_art_x = 150
         album_art_y = (CANVAS_HEIGHT - 400) // 2
         
-        # Add glow effect behind album art
         glow = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
         glow_draw = ImageDraw.Draw(glow)
         for i in range(10):
@@ -280,34 +270,28 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
         
         image.paste(glow, (album_art_x - 10, album_art_y - 10), glow)
         
-        # Add white border and album art
         border = 8
         draw.rectangle([
             (album_art_x - border, album_art_y - border),
             (album_art_x + 400 + border, album_art_y + 400 + border)
         ], fill=(255, 255, 255, 255))
         
-        # Convert album art to RGBA
         album_art = album_art.convert('RGBA')
         image.paste(album_art, (album_art_x, album_art_y), album_art)
         
-        # Text placement
         text_start_x = 650
         y = 100
         
-        # Draw title
         title_lines = textwrap.wrap(track_name, width=20)
         for line in title_lines:
             draw.text((text_start_x, y), line, 
                      font=title_font, fill=(255, 255, 255, 255))
             y += 90
         
-        # Draw artist name
         y += 20
         draw.text((text_start_x, y), f"by {artist_name}", 
                  font=artist_font, fill=(255, 235, 235, 255))
         
-        # Draw separator line
         y += 80
         line_length = 400
         for i in range(4):
@@ -316,7 +300,6 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
                       (text_start_x + line_length, y + i)],
                      fill=(accent_color[0], accent_color[1], accent_color[2], alpha))
         
-        # Draw album and duration
         y += 60
         draw.text((text_start_x, y), f"💿  {album_name}", 
                  font=details_font, fill=(255, 255, 255, 255))
@@ -324,7 +307,6 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
         draw.text((text_start_x, y), f"⏱  {duration}", 
                  font=details_font, fill=(255, 255, 255, 255))
         
-        # Add subtle gradient overlay
         gradient_overlay = Image.new('RGBA', (CANVAS_WIDTH, CANVAS_HEIGHT), (0, 0, 0, 0))
         gradient_draw = ImageDraw.Draw(gradient_overlay)
         for i in range(CANVAS_HEIGHT):
@@ -334,7 +316,6 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
         
         image = Image.alpha_composite(image, gradient_overlay)
         
-        # Convert back to RGB for saving
         image = image.convert('RGB')
         
         output = BytesIO()
@@ -351,7 +332,6 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
 def tweet_current_song():
     """Get current song from Spotify and tweet it"""
     try:
-        # Check rate limits first
         can_tweet, reason = rate_limiter.can_tweet()
         if not can_tweet:
             print(f"\nCannot tweet: {reason}")
@@ -451,10 +431,8 @@ def main():
                 duration_ms = current_track['item']['duration_ms']
                 remaining_ms = duration_ms - progress_ms
                 
-                # Add 2 seconds buffer to ensure song has fully changed
                 wait_time = (remaining_ms / 1000) + 2
                 
-                # Get song details for display
                 track_name = current_track['item']['name']
                 artist_name = current_track['item']['artists'][0]['name']
                 
