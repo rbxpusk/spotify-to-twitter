@@ -15,6 +15,9 @@ import colorsys
 from collections import Counter
 import math
 import random
+from tqdm import tqdm
+import sys
+from datetime import datetime
 
 load_dotenv()
 
@@ -355,16 +358,36 @@ def tweet_current_song():
         print("Full traceback:")
         traceback.print_exc()
 
+def format_time(seconds):
+    """Format seconds into MM:SS"""
+    minutes = int(seconds // 60)
+    seconds = int(seconds % 60)
+    return f"{minutes}:{seconds:02d}"
+
+def wait_with_progress(total_seconds, description=""):
+    """Wait with a progress bar showing time remaining"""
+    try:
+        with tqdm(total=total_seconds, 
+                 desc=description,
+                 bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f}s [{elapsed}<{remaining}]',
+                 ncols=80) as pbar:
+            for _ in range(int(total_seconds)):
+                time.sleep(1)
+                pbar.update(1)
+    except KeyboardInterrupt:
+        print("\nProgress interrupted by user")
+        raise
+
 def main():
     print("Starting Spotify to Twitter bot...")
     last_tweeted_song = None
-    rate_limit_wait = 0  # Track rate limit cooldown
+    rate_limit_wait = 0
     
     while True:
         try:
             if rate_limit_wait > 0:
-                print(f"\nRate limit cooldown: waiting {rate_limit_wait} seconds...")
-                time.sleep(rate_limit_wait)
+                print("\nRate limit hit! Cooling down...")
+                wait_with_progress(rate_limit_wait, "Rate limit cooldown")
                 rate_limit_wait = 0
             
             print("\nChecking current playback...")
@@ -376,43 +399,47 @@ def main():
                 duration_ms = current_track['item']['duration_ms']
                 remaining_ms = duration_ms - progress_ms
                 
-                # Add 2 seconds buffer to ensure song has fully changed
                 wait_time = (remaining_ms / 1000) + 2
                 
-                print(f"Found track with ID: {current_song_id}")
-                print(f"Song progress: {format_duration(progress_ms)} / {format_duration(duration_ms)}")
+                track_name = current_track['item']['name']
+                artist_name = current_track['item']['artists'][0]['name']
                 
-                # Only tweet if the song has changed
+                print(f"\nFound track: {track_name} by {artist_name}")
+                print(f"Progress: {format_duration(progress_ms)} / {format_duration(duration_ms)}")
+                
                 if current_song_id != last_tweeted_song:
                     print("New song detected, tweeting...")
                     try:
                         tweet_current_song()
                         last_tweeted_song = current_song_id
-                        print(f"Waiting {int(wait_time)} seconds for song to finish...")
-                        time.sleep(wait_time)
+                        print(f"\nWaiting for song to finish...")
+                        wait_with_progress(int(wait_time), f"🎵 {track_name} - {artist_name}")
                     except tweepy.errors.TooManyRequests as e:
-                        print("Hit Twitter rate limit. Adding cooldown period...")
-                        rate_limit_wait = 900  # 15 minutes cooldown
+                        print("\nHit Twitter rate limit. Adding cooldown period...")
+                        rate_limit_wait = 900
                         continue
                     except Exception as e:
-                        print(f"Error tweeting: {str(e)}")
-                        # If there's an error, wait 60 seconds before retry
-                        time.sleep(60)
+                        print(f"\nError tweeting: {str(e)}")
+                        wait_with_progress(60, "Error cooldown")
                 else:
-                    print("Same song still playing...")
-                    print(f"Waiting {int(wait_time)} seconds for song to finish...")
-                    time.sleep(wait_time)
+                    print("\nSame song still playing...")
+                    wait_with_progress(int(wait_time), f"🎵 {track_name} - {artist_name}")
             else:
-                print("No track currently playing")
-                # If no track is playing, check every minute
-                time.sleep(60)
+                print("\nNo track currently playing")
+                wait_with_progress(60, "Waiting for playback")
             
+        except KeyboardInterrupt:
+            print("\nBot stopped by user")
+            sys.exit(0)
         except Exception as e:
-            print(f"Error in main loop: {str(e)}")
+            print(f"\nError in main loop: {str(e)}")
             print("Full traceback:")
             traceback.print_exc()
-            # If there's an error, wait 60 seconds before retry
-            time.sleep(60)
+            wait_with_progress(60, "Error recovery")
 
 if __name__ == "__main__":
-    main() 
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nBot stopped by user")
+        sys.exit(0) 

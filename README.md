@@ -135,7 +135,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📸 Screenshots
 
-*(Add your screenshots here)*
+*https://imgur.com/veQe2lf*
 
 ## 🐛 Troubleshooting
 
