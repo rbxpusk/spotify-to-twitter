@@ -2,7 +2,7 @@
 
 A beautiful Python bot that automatically tweets your currently playing Spotify tracks with custom-generated artwork! 
 
-![Spotify to Twitter Bot](https://imgur.com/veQe2lf) 
+![Example](https://imgur.com/veQe2lf) 
 
 ## ✨ Features
 
