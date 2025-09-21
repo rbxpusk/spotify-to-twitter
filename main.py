@@ -31,6 +31,8 @@ TWITTER_API_SECRET = os.getenv('TWITTER_API_SECRET')
 TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
 
+CAT_API_KEY = os.getenv('CAT_API_KEY')  # Optional API key for The Cat API
+
 CANVAS_WIDTH = 1200
 CANVAS_HEIGHT = 630
 BACKGROUND_COLOR = "#FF3366"
@@ -329,14 +331,73 @@ def create_song_image(track_name, artist_name, album_name, duration, album_art_u
         traceback.print_exc()
         return None
 
+def get_random_cat_image_url():
+    """Fetch a random cat image URL from The Cat API."""
+    try:
+        headers = {}
+        if CAT_API_KEY:
+            headers['x-api-key'] = CAT_API_KEY
+        
+        response = requests.get("https://api.thecatapi.com/v1/images/search", headers=headers)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        
+        data = response.json()
+        if data and isinstance(data, list) and 'url' in data[0]:
+            return data[0]['url']
+        else:
+            print("Unexpected response from The Cat API:", data)
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching cat image: {e}")
+        return None
+
 def tweet_current_song():
-    """Get current song from Spotify and tweet it"""
+    """Get current song from Spotify and tweet it, or tweet a cat picture."""
     try:
         can_tweet, reason = rate_limiter.can_tweet()
         if not can_tweet:
             print(f"\nCannot tweet: {reason}")
             return False
         
+        # Randomly decide whether to tweet a cat picture
+        if random.randint(1, 10) == 1:  # 1 in 10 chance
+            print("Time for a cat picture!")
+            cat_image_url = get_random_cat_image_url()
+            if cat_image_url:
+                try:
+                    print("Downloading cat image...")
+                    cat_image = download_image(cat_image_url)
+                    
+                    if cat_image:
+                        print("Uploading cat image to Twitter...")
+                        media_upload = api.media_upload(filename="cat.png", file=cat_image)
+                        print("Media uploaded successfully")
+                        
+                        tweet_text = "Behold! A random cat picture. 😻 #cats"
+                        print("Sending cat tweet...")
+                        client.create_tweet(text=tweet_text, media_ids=[media_upload.media_id])
+                        print(f"Successfully tweeted: {tweet_text}")
+                        rate_limiter.record_success()
+                        return True
+                    else:
+                        print("Failed to download cat image, sending text-only fallback tweet")
+                        client.create_tweet(text="A cat picture was supposed to be here... technical difficulties! #cats")
+                        rate_limiter.record_success()
+                        return True
+                except tweepy.errors.TooManyRequests:
+                    print("\nHit Twitter rate limit")
+                    rate_limiter.record_error()
+                    return False
+                except Exception as e:
+                    print(f"\nError tweeting cat picture: {str(e)}")
+                    return False
+            else:
+                print("Failed to fetch cat image URL, tweeting fallback message.")
+                client.create_tweet(text="Could not retrieve cat picture. Sorry! #cats")
+                rate_limiter.record_success()
+                return True
+        
+        # If not tweeting a cat picture, tweet the current song
         print("Fetching current track from Spotify...")
         current_track = sp.current_playback()
         
@@ -466,4 +527,4 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\nBot stopped by user")
-        sys.exit(0) 
+        sys.exit(0)
